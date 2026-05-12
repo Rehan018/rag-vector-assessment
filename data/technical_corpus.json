@@ -1,0 +1,82 @@
+[
+  {
+    "id": "chunk_001",
+    "title": "Peak Load Handling",
+    "text": "The system handles peak load by placing incoming requests into a durable queue and processing them through horizontally scalable workers. API servers remain stateless, while worker replicas can be increased based on queue depth and processing latency. Backpressure is applied when the queue exceeds safe operating thresholds.",
+    "metadata": {
+      "topic": "scalability"
+    }
+  },
+  {
+    "id": "chunk_002",
+    "title": "Caching Strategy",
+    "text": "Frequently requested data is cached using a short time-to-live policy. Cache keys are built from stable request parameters, and cache invalidation happens after data updates. The cache is treated as an optimization layer, not as the source of truth.",
+    "metadata": {
+      "topic": "performance"
+    }
+  },
+  {
+    "id": "chunk_003",
+    "title": "Retry and Failure Handling",
+    "text": "Transient failures are retried with exponential backoff and jitter. Non-retryable errors such as validation failures are returned immediately. Failed background jobs are moved to a dead-letter queue after the retry budget is exhausted.",
+    "metadata": {
+      "topic": "reliability"
+    }
+  },
+  {
+    "id": "chunk_004",
+    "title": "Observability and Monitoring",
+    "text": "The platform emits structured logs, latency metrics, error rates, queue depth, and worker health signals. Dashboards track p95 latency, failed job counts, and retrieval quality metrics. Alerts are triggered when service-level objectives are at risk.",
+    "metadata": {
+      "topic": "observability"
+    }
+  },
+  {
+    "id": "chunk_005",
+    "title": "Authentication and Authorization",
+    "text": "Requests are authenticated using signed tokens. Authorization is enforced at the API boundary and again before sensitive operations. Role-based permissions prevent users from accessing data outside their allowed scope.",
+    "metadata": {
+      "topic": "security"
+    }
+  },
+  {
+    "id": "chunk_006",
+    "title": "Database Consistency",
+    "text": "The system uses transactions for critical writes and idempotency keys for repeated client requests. Read replicas are used for non-critical reads, while strongly consistent reads are reserved for workflows that require current state.",
+    "metadata": {
+      "topic": "database"
+    }
+  },
+  {
+    "id": "chunk_007",
+    "title": "Semantic Search Pipeline",
+    "text": "Text documents are split into chunks, embedded into dense vectors, and stored in a vector index. At query time, the user question is embedded and compared against indexed vectors using similarity search to retrieve the most relevant chunks.",
+    "metadata": {
+      "topic": "rag"
+    }
+  },
+  {
+    "id": "chunk_008",
+    "title": "Query Expansion",
+    "text": "Query expansion rewrites short or ambiguous user questions into more explicit search queries. For example, a question about handling traffic spikes may be expanded to mention peak load, queueing, autoscaling, backpressure, and worker scaling.",
+    "metadata": {
+      "topic": "retrieval"
+    }
+  },
+  {
+    "id": "chunk_009",
+    "title": "Production Vector Search Migration",
+    "text": "A local FAISS index can be migrated to a managed vector search service by exporting embeddings, metadata, and document identifiers. In production, indexing, access control, monitoring, and incremental updates must be handled carefully.",
+    "metadata": {
+      "topic": "production"
+    }
+  },
+  {
+    "id": "chunk_010",
+    "title": "Retrieval Evaluation",
+    "text": "Retrieval quality is evaluated by comparing top-k results for representative queries. Useful evaluation signals include whether the expected chunk appears in the top results, rank position, similarity score, and whether query expansion improves or hurts relevance.",
+    "metadata": {
+      "topic": "evaluation"
+    }
+  }
+]
