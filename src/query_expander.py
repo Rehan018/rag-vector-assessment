@@ -118,20 +118,27 @@ User query:
 """.strip()
 
 
+class MockVertexResponse:
+    """
+    Small response object that behaves closer to Vertex AI SDK responses,
+    where generated content is accessed through a text attribute.
+    """
+
+    def __init__(self, text: str):
+        self.text = text
+
+
 class MockVertexGenerativeModel:
     """
     Lightweight mock of vertexai.language_models.GenerativeModel.
 
-    The assignment asks for mocking the GenerativeModel used in query expansion.
-    This class gives us a Vertex-style interface while keeping execution local.
+    The assessment asks for mocking the GenerativeModel used in query expansion.
+    This class gives a Vertex-style interface while keeping execution local.
     """
 
     def __init__(self, query_expander: QueryExpander):
         self.query_expander = query_expander
 
-    def generate_content(self, prompt: str):
+    def generate_content(self, prompt: str) -> MockVertexResponse:
         expanded = self.query_expander.expand(prompt)
-
-        return {
-            "text": expanded
-        }
+        return MockVertexResponse(expanded)

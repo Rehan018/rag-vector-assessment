@@ -24,6 +24,14 @@ The benchmark uses three queries that represent common retrieval problems:
 2. A reliability query about repeated background job failures
 3. An evaluation query about detecting retrieval quality degradation
 
+## Metric Summary
+
+| Query                                                  | Expected Chunk   |   Strategy A Rank |   Strategy B Rank |   A Score |   B Score |   Score Delta | Verdict                                   |
+|--------------------------------------------------------|------------------|-------------------|-------------------|-----------|-----------|---------------|-------------------------------------------|
+| How does the system handle peak load?                  | chunk_001        |                 1 |                 1 |    0.6273 |    0.833  |        0.2057 | Same rank, stronger score after expansion |
+| What happens when background jobs fail repeatedly?     | chunk_003        |                 1 |                 1 |    0.6885 |    0.8064 |        0.1179 | Same rank, stronger score after expansion |
+| How can we know if retrieval quality is getting worse? | chunk_010        |                 1 |                 1 |    0.5578 |    0.9333 |        0.3756 | Same rank, stronger score after expansion |
+
 ## Query 1
 
 Original query: `How does the system handle peak load?`
@@ -48,7 +56,7 @@ Expanded query: `How does the system handle peak load, traffic spikes, queue dep
 
 ### Observation
 
-Both strategies ranked `Peak Load Handling` first. That is a good sign because the expanded query did not drift away from the user's intent. The lower-ranked results changed from ['Peak Load Handling', 'Database Consistency', 'Observability and Monitoring'] to ['Peak Load Handling', 'Observability and Monitoring', 'Database Consistency'], which shows that query expansion can still affect recall even when the top result stays the same.
+Both strategies ranked `Peak Load Handling` first. That is a good sign because the expanded query did not drift away from the user's intent. The full top-k order changed from ['Peak Load Handling', 'Database Consistency', 'Observability and Monitoring'] to ['Peak Load Handling', 'Observability and Monitoring', 'Database Consistency']. The expected chunk for this query is `chunk_001`. Strategy A found it at rank 1, and Strategy B found it at rank 1. Verdict: Same rank, stronger score after expansion.
 
 ## Query 2
 
@@ -74,7 +82,7 @@ Expanded query: `What retry strategy is used for repeated background job failure
 
 ### Observation
 
-Both strategies ranked `Retry and Failure Handling` first. That is a good sign because the expanded query did not drift away from the user's intent. The lower-ranked results changed from ['Retry and Failure Handling', 'Peak Load Handling', 'Observability and Monitoring'] to ['Retry and Failure Handling', 'Peak Load Handling', 'Observability and Monitoring'], which shows that query expansion can still affect recall even when the top result stays the same.
+Both strategies returned the same ranking order with `Retry and Failure Handling` first. In this case, query expansion did not change the top-k ordering. The expected chunk for this query is `chunk_003`. Strategy A found it at rank 1, and Strategy B found it at rank 1. Verdict: Same rank, stronger score after expansion.
 
 ## Query 3
 
@@ -100,11 +108,13 @@ Expanded query: `How is retrieval quality evaluated using top-k results, expecte
 
 ### Observation
 
-Both strategies ranked `Retrieval Evaluation` first. That is a good sign because the expanded query did not drift away from the user's intent. The lower-ranked results changed from ['Retrieval Evaluation', 'Retry and Failure Handling', 'Caching Strategy'] to ['Retrieval Evaluation', 'Semantic Search Pipeline', 'Query Expansion'], which shows that query expansion can still affect recall even when the top result stays the same.
+Both strategies ranked `Retrieval Evaluation` first. That is a good sign because the expanded query did not drift away from the user's intent. The full top-k order changed from ['Retrieval Evaluation', 'Retry and Failure Handling', 'Caching Strategy'] to ['Retrieval Evaluation', 'Semantic Search Pipeline', 'Query Expansion']. The expected chunk for this query is `chunk_010`. Strategy A found it at rank 1, and Strategy B found it at rank 1. Verdict: Same rank, stronger score after expansion.
 
 ## Overall Takeaway
 
 Query expansion is useful when the original user query is short, vague, or does not contain the same terms used in the indexed corpus.
+
+The measurable signal I care about is whether the expected chunk is found in the top-k results, whether its rank improves, and whether its similarity score improves after expansion.
 
 The main benefit is improved recall: the expanded query can include related operational terms such as queue depth, backpressure, retry budget, dead-letter queue, ranking, or retrieval quality metrics.
 

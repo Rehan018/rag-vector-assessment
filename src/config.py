@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 
@@ -16,7 +15,10 @@ class AppConfig:
     ollama_model_name: str = os.getenv("OLLAMA_MODEL_NAME", "llama4:latest")
 
     corpus_path: str = os.getenv("CORPUS_PATH", "data/technical_corpus.json")
-    benchmark_output_path: str = os.getenv("BENCHMARK_OUTPUT_PATH", "retrieval_benchmark.md")
+    benchmark_output_path: str = os.getenv(
+        "BENCHMARK_OUTPUT_PATH",
+        "retrieval_benchmark.md"
+    )
 
 
 config = AppConfig()

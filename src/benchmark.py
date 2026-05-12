@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from tabulate import tabulate
 
 from src.config import config
 from src.data_loader import DataLoader
 from src.embeddings import SentenceTransformerEmbeddingProvider
-from src.models import BenchmarkCase, RetrievalResult
+from src.models import BenchmarkCase, BenchmarkMetric, RetrievalResult
 from src.query_expander import MockQueryExpander
 from src.retriever import Retriever
 from src.vector_store import FaissVectorStore
@@ -17,6 +17,13 @@ BENCHMARK_QUERIES = [
     "What happens when background jobs fail repeatedly?",
     "How can we know if retrieval quality is getting worse?",
 ]
+
+
+EXPECTED_CHUNKS = {
+    "How does the system handle peak load?": "chunk_001",
+    "What happens when background jobs fail repeatedly?": "chunk_003",
+    "How can we know if retrieval quality is getting worse?": "chunk_010",
+}
 
 
 class BenchmarkRunner:
@@ -45,12 +52,19 @@ class BenchmarkRunner:
                 top_k=self.top_k,
             )
 
+            metric = self._compute_metric(
+                query=query,
+                raw_results=raw_results,
+                expanded_results=expanded_results,
+            )
+
             cases.append(
                 BenchmarkCase(
                     query=query,
                     expanded_query=expanded_query,
                     strategy_a_results=raw_results,
                     strategy_b_results=expanded_results,
+                    metric=metric,
                 )
             )
 
@@ -90,6 +104,10 @@ class BenchmarkRunner:
             "2. A reliability query about repeated background job failures",
             "3. An evaluation query about detecting retrieval quality degradation",
             "",
+            "## Metric Summary",
+            "",
+            self._format_metric_summary(cases),
+            "",
         ]
 
         for index, case in enumerate(cases, start=1):
@@ -122,6 +140,8 @@ class BenchmarkRunner:
                 "",
                 "Query expansion is useful when the original user query is short, vague, or does not contain the same terms used in the indexed corpus.",
                 "",
+                "The measurable signal I care about is whether the expected chunk is found in the top-k results, whether its rank improves, and whether its similarity score improves after expansion.",
+                "",
                 "The main benefit is improved recall: the expanded query can include related operational terms such as queue depth, backpressure, retry budget, dead-letter queue, ranking, or retrieval quality metrics.",
                 "",
                 "The main risk is query drift. If the expansion model adds concepts that the user did not intend, retrieval can move toward a different topic. For that reason, I would evaluate query expansion continuously instead of assuming it is always better.",
@@ -132,6 +152,125 @@ class BenchmarkRunner:
         )
 
         path.write_text("\n".join(lines), encoding="utf-8")
+
+    def _compute_metric(
+        self,
+        query: str,
+        raw_results: List[RetrievalResult],
+        expanded_results: List[RetrievalResult],
+    ) -> Optional[BenchmarkMetric]:
+        expected_chunk_id = EXPECTED_CHUNKS.get(query)
+
+        if expected_chunk_id is None:
+            return None
+
+        strategy_a_rank, strategy_a_score = self._find_expected_result(
+            expected_chunk_id=expected_chunk_id,
+            results=raw_results,
+        )
+
+        strategy_b_rank, strategy_b_score = self._find_expected_result(
+            expected_chunk_id=expected_chunk_id,
+            results=expanded_results,
+        )
+
+        score_delta = None
+        if strategy_a_score is not None and strategy_b_score is not None:
+            score_delta = strategy_b_score - strategy_a_score
+
+        verdict = self._build_metric_verdict(
+            strategy_a_rank=strategy_a_rank,
+            strategy_b_rank=strategy_b_rank,
+            score_delta=score_delta,
+        )
+
+        return BenchmarkMetric(
+            query=query,
+            expected_chunk_id=expected_chunk_id,
+            strategy_a_rank=strategy_a_rank,
+            strategy_b_rank=strategy_b_rank,
+            strategy_a_score=strategy_a_score,
+            strategy_b_score=strategy_b_score,
+            score_delta=score_delta,
+            verdict=verdict,
+        )
+
+    def _find_expected_result(
+        self,
+        expected_chunk_id: str,
+        results: List[RetrievalResult],
+    ) -> tuple[Optional[int], Optional[float]]:
+        for result in results:
+            if result.chunk_id == expected_chunk_id:
+                return result.rank, result.score
+
+        return None, None
+
+    def _build_metric_verdict(
+        self,
+        strategy_a_rank: Optional[int],
+        strategy_b_rank: Optional[int],
+        score_delta: Optional[float],
+    ) -> str:
+        if strategy_a_rank is None and strategy_b_rank is None:
+            return "Expected chunk missed by both strategies"
+
+        if strategy_a_rank is None and strategy_b_rank is not None:
+            return "Improved: expected chunk found only after expansion"
+
+        if strategy_a_rank is not None and strategy_b_rank is None:
+            return "Worse: expansion lost the expected chunk"
+
+        if strategy_b_rank < strategy_a_rank:
+            return "Improved: expected chunk moved higher"
+
+        if strategy_b_rank > strategy_a_rank:
+            return "Worse: expected chunk moved lower"
+
+        if score_delta is not None and score_delta > 0:
+            return "Same rank, stronger score after expansion"
+
+        if score_delta is not None and score_delta < 0:
+            return "Same rank, weaker score after expansion"
+
+        return "No measurable change"
+
+    def _format_metric_summary(self, cases: List[BenchmarkCase]) -> str:
+        table = []
+
+        for case in cases:
+            if case.metric is None:
+                continue
+
+            metric = case.metric
+
+            table.append(
+                [
+                    metric.query,
+                    metric.expected_chunk_id,
+                    self._format_rank(metric.strategy_a_rank),
+                    self._format_rank(metric.strategy_b_rank),
+                    self._format_score(metric.strategy_a_score),
+                    self._format_score(metric.strategy_b_score),
+                    self._format_score(metric.score_delta),
+                    metric.verdict,
+                ]
+            )
+
+        return tabulate(
+            table,
+            headers=[
+                "Query",
+                "Expected Chunk",
+                "Strategy A Rank",
+                "Strategy B Rank",
+                "A Score",
+                "B Score",
+                "Score Delta",
+                "Verdict",
+            ],
+            tablefmt="github",
+        )
 
     def _format_results_table(self, results: List[RetrievalResult]) -> str:
         table = [
@@ -157,20 +296,44 @@ class BenchmarkRunner:
         raw_titles = [result.title for result in case.strategy_a_results]
         expanded_titles = [result.title for result in case.strategy_b_results]
 
+        if case.metric is not None:
+            metric_line = (
+                f"The expected chunk for this query is `{case.metric.expected_chunk_id}`. "
+                f"Strategy A found it at rank {self._format_rank(case.metric.strategy_a_rank)}, "
+                f"and Strategy B found it at rank {self._format_rank(case.metric.strategy_b_rank)}. "
+                f"Verdict: {case.metric.verdict}."
+            )
+        else:
+            metric_line = "No expected chunk was configured for this query."
+
+        if raw_top.chunk_id == expanded_top.chunk_id and raw_titles == expanded_titles:
+            return (
+                f"Both strategies returned the same ranking order with `{raw_top.title}` first. "
+                "In this case, query expansion did not change the top-k ordering. "
+                f"{metric_line}"
+            )
+
         if raw_top.chunk_id == expanded_top.chunk_id:
             return (
                 f"Both strategies ranked `{raw_top.title}` first. "
                 "That is a good sign because the expanded query did not drift away from the user's intent. "
-                f"The lower-ranked results changed from {raw_titles} to {expanded_titles}, "
-                "which shows that query expansion can still affect recall even when the top result stays the same."
+                f"The full top-k order changed from {raw_titles} to {expanded_titles}. "
+                f"{metric_line}"
             )
 
         return (
             f"Strategy A ranked `{raw_top.title}` first, while Strategy B ranked `{expanded_top.title}` first. "
             "This shows that query expansion changed the retrieval behavior. "
             "That can be helpful when the rewritten query adds missing technical context, "
-            "but it also needs evaluation because an aggressive rewrite can move retrieval away from the original intent."
+            "but it also needs evaluation because an aggressive rewrite can move retrieval away from the original intent. "
+            f"{metric_line}"
         )
+
+    def _format_rank(self, rank: Optional[int]) -> str:
+        return "missed" if rank is None else str(rank)
+
+    def _format_score(self, score: Optional[float]) -> str:
+        return "n/a" if score is None else f"{score:.4f}"
 
 
 def build_default_retriever() -> Retriever:

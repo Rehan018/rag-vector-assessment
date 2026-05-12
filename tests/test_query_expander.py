@@ -39,5 +39,5 @@ def test_mock_vertex_generative_model_returns_vertex_like_response():
 
     response = model.generate_content("How does the system handle peak load?")
 
-    assert "text" in response
-    assert "backpressure" in response["text"]
+    assert hasattr(response, "text")
+    assert "backpressure" in response.text

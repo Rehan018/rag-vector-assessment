@@ -116,3 +116,32 @@ def test_benchmark_runner_writes_markdown_report(tmp_path):
     assert "Strategy A: Raw Vector Search" in content
     assert "Strategy B: AI-Enhanced Retrieval" in content
     assert "Expanded query" in content
+
+def test_expected_chunk_metric_is_computed():
+    retriever = make_retriever()
+    runner = BenchmarkRunner(retriever=retriever, top_k=2)
+
+    cases = runner.run(["How does the system handle peak load?"])
+
+    metric = cases[0].metric
+
+    assert metric is not None
+    assert metric.expected_chunk_id == "chunk_001"
+
+    assert metric.strategy_a_rank is not None
+    assert metric.strategy_b_rank is not None
+
+    assert 1 <= metric.strategy_a_rank <= 2
+    assert 1 <= metric.strategy_b_rank <= 2
+
+    assert metric.strategy_a_score is not None
+    assert metric.strategy_b_score is not None
+    assert metric.score_delta is not None
+
+    assert metric.verdict in {
+        "Same rank, stronger score after expansion",
+        "No measurable change",
+        "Same rank, weaker score after expansion",
+        "Improved: expected chunk moved higher",
+        "Worse: expected chunk moved lower",
+    }
