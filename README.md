@@ -166,6 +166,7 @@ It includes:
 - expanded query
 - top-3 results from raw vector search
 - top-3 results from expanded-query search
+- expected chunk rank, score delta, and verdict
 - a short observation for each comparison
 
 The benchmark is intentionally simple. It is not claiming that query expansion is always better. In real systems, query expansion can improve recall, but it can also introduce query drift if the rewritten query adds assumptions that were not present in the user's original intent.

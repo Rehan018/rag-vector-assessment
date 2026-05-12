@@ -117,6 +117,7 @@ def test_benchmark_runner_writes_markdown_report(tmp_path):
     assert "Strategy B: AI-Enhanced Retrieval" in content
     assert "Expanded query" in content
 
+
 def test_expected_chunk_metric_is_computed():
     retriever = make_retriever()
     runner = BenchmarkRunner(retriever=retriever, top_k=2)
